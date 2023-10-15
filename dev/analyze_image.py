@@ -24,7 +24,7 @@ def run_inference( image: Image,text_prompt: str,model: LangSAM,  box_threshold=
     boxes, logits, phrases = detect_bb_on_image(model, image, text_prompt, box_threshold=box_threshold, text_threshold=text_threshold, show_run_time=show_run_time)
     display_image_with_boxes(image, boxes, logits)
     return boxes, logits, phrases
-   
+
 
 if __name__ == '__main__':
     image_path =  "data/crop_building.png"
