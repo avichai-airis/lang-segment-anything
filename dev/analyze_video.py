@@ -1,47 +1,184 @@
+import numpy as np
+
 from dev.analyze_image import run_inference
+from dev.drawing import display_image_with_boxes
 from lang_sam import LangSAM
 import cv2
-
-def read_video(video_path):
-    frame_rate = 30
+from PIL import Image
+from dev.postprocessing import crop_image
+from tqdm import tqdm
+from dev.utils import cal_max_bb
+import shutil
+import os
+import matplotlib.pyplot as plt
+def read_video_imageio(video_path):
+    # read video
+    frames = iio.mimread(video_path, memtest=False)
+    # calculate the fps
+    fps = iio.get_reader(video_path).get_meta_data()['fps']
+    return frames, fps
     model = LangSAM()
+    cropped_frames = []
+    original_frames = []
+    frames, fps = read_video_cv2(video_path)
+
+    for frame in tqdm(frames[::int(fps)]):
+        # convert numpy to PIL image
+        frame = Image.fromarray(frame)
+        boxes, logits, phrases = run_inference(frame, "buildings", model)
+        if len(boxes) == 0:
+            curr_crop_frame = frame
+        else:
+            curr_crop_frame = crop_image(frame, boxes)
+        curr_crop_frame = np.array(curr_crop_frame)
+        cropped_frames.append(curr_crop_frame)
+
+        # if max_x < curr_crop_frame.shape[0]:
+        #     max_x = curr_crop_frame.shape[0]
+        # if max_y < curr_crop_frame.shape[1]:
+        #     max_y = curr_crop_frame.shape[1]
+        original_frames.append(np.array(frame))
+        # save cropped frame
+        # curr_crop_frame.save("results/"+ video_path.split("/")[-1].split(".")[0] + f"/cropped_{i}.png")
+        i += 1
+    max_x = original_frames[0].shape[0]
+    max_y = original_frames[0].shape[1]
+    convert_frames_to_video(cropped_frames, original_frames, "results/" + video_path.split("/")[-1], max_x, max_y,
+                            fps=1)
+
+
+def read_video_cv2(video_path):
     # read video
     cap = cv2.VideoCapture(video_path)
-    # Create a list to store the frames.
+    # calculate the fps
+    fps = cap.get(cv2.CAP_PROP_FPS)
     frames = []
-    i = 0
-    # Loop over the frames in the video.
-    while True:
-
-        # Capture a frame.
+    while(cap.isOpened()):
         ret, frame = cap.read()
-
-        # If the frame is empty, break out of the loop.
-        if not ret:
+        if ret == False:
             break
-        if i % frame_rate == 0:
-
-            # Convert the frame from BGR to RGB color space.
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            # Convert the frame to PIL format.
-            frame_pil = Image.fromarray(frame)
-
-            # Detect objects in the frame.
-            masks, boxes, _, logits = detect_sign_in_image(frame_pil, text_prompt, model)
-            if len(masks) == 0:
-                print(f"No objects of the '{text_prompt}' prompt detected in the image.")
-            else:
-                # Display the image with bounding boxes and confidence scores
-                data = display_image_with_boxes(frame_pil, boxes, logits)
-                frames.append(data)
-                print(f'frame number {i}')
-        i += 1
-    # Release the video.
+        # convert to RGB
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frames.append(frame)
     cap.release()
+    return frames, fps
+def convert_frames_to_video(crop_frames,orig_frames, output_path, max_x, max_y, fps=30):
+    # pad all images to the same size
+    for i in range(len(crop_frames)):
+        crop_frames[i] = np.pad(crop_frames[i], ((0, max_x - crop_frames[i].shape[0]), (0, max_y - crop_frames[i].shape[1]), (0, 0)),
+                           'constant', constant_values=min(crop_frames[i].flatten()))
+        # concat original and cropped
+        crop_frames[i] = np.concatenate((orig_frames[i], crop_frames[i]), axis=1)
+
+    # Write the frames to a video.
+    height, width, channels = crop_frames[0].shape
+    fourcc  = cv2.VideoWriter_fourcc(*'mp4v')
+    video = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+
+    for frame in crop_frames:
+        # convert to RGB
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        video.write(frame)
+
+    # Release the video.
+    video.release()
+def run_global_crop(video_path):
+    g_bb_min_x = 100000
+    g_bb_min_y = 100000
+    g_bb_max_x = 0
+    g_bb_max_y = 0
+
+    model = LangSAM()
+    cropped_frames = []
+    original_frames = []
+    frames, fps = read_video_cv2(video_path)
+
+    for frame in tqdm(frames[::int(fps)]):
+        # convert numpy to PIL image
+        frame = Image.fromarray(frame)
+        boxes, logits, phrases = run_inference(frame, "buildings", model)
+        original_frames.append(np.array(frame))
+        if len(boxes) != 0:
+            bb_min_x, bb_min_y, bb_max_x, bb_max_y = cal_max_bb(boxes)
+            if bb_min_x < g_bb_min_x:
+                g_bb_min_x = bb_min_x
+            if bb_min_y < g_bb_min_y:
+                g_bb_min_y = bb_min_y
+            if bb_max_x > g_bb_max_x:
+                g_bb_max_x = bb_max_x
+            if bb_max_y > g_bb_max_y:
+                g_bb_max_y = bb_max_y
+
+    for frame in tqdm(original_frames):
+        cropped_frames.append(frame[int(g_bb_min_x):int(g_bb_max_x), int(g_bb_min_y):int(g_bb_max_y), :])
+    max_x = original_frames[0].shape[0]
+    max_y = original_frames[0].shape[1]
+    convert_frames_to_video(cropped_frames, original_frames, "results/global_crop/" + video_path.split("/")[-1], max_x, max_y,
+                            fps=1)
+
+
+    pass
+def run(video_path):
+    max_x = 0
+    max_y = 0
+    model = LangSAM()
+    cropped_frames = []
+    original_frames = []
+    frames, fps = read_video_cv2(video_path)
+    # make results dir
+
+    # if not os.path.exists("results/"+ video_path.split("/")[-1].split(".")[0]):
+    #     os.makedirs("results/"+ video_path.split("/")[-1].split(".")[0])
+    # else:
+    #     # remove old results
+    #
+    #     shutil.rmtree("results/"+ video_path.split("/")[-1].split(".")[0])
+    i = 0
+    for frame in tqdm(frames[::int(fps)]):
+        # convert numpy to PIL image
+        frame = Image.fromarray(frame)
+        boxes, logits, phrases = run_inference(frame,"buildings", model)
+        if len(boxes) == 0:
+            curr_crop_frame = frame
+        else:
+            curr_crop_frame = crop_image(frame, boxes)
+        curr_crop_frame = np.array(curr_crop_frame)
+        cropped_frames.append(curr_crop_frame)
+
+
+
+        # if max_x < curr_crop_frame.shape[0]:
+        #     max_x = curr_crop_frame.shape[0]
+        # if max_y < curr_crop_frame.shape[1]:
+        #     max_y = curr_crop_frame.shape[1]
+        original_frames.append(np.array(frame))
+        # save cropped frame
+        # curr_crop_frame.save("results/"+ video_path.split("/")[-1].split(".")[0] + f"/cropped_{i}.png")
+        i += 1
+    max_x = original_frames[0].shape[0]
+    max_y = original_frames[0].shape[1]
+    convert_frames_to_video(cropped_frames,original_frames, "results/"+ video_path.split("/")[-1],max_x, max_y, fps=1)
+
+
 
 # img_c = crop_image(image, boxes)
 # plt.imshow(img_c)
 # plt.show()
 
 if __name__ == '__main__':
-    pass
+    import imageio as iio
+    # import numpy as np
+    # # for idx, frame in enumerate(iio.imiter("data/gaza1.mp4")):
+    # #     print(f"Frame {idx}: avg. color {np.sum(frame, axis=-1)}")
+    # # read video
+    # frames = iio.mimread("data/gaza2.mp4", memtest=False)
+    # # calculate the fps
+    # fps = iio.get_reader("data/gaza2.mp4").get_meta_data()['fps']
+    # print(f"fps {fps}")
+    # frames = iio.imread("data/gaza1.mp4", plugin="pyav")
+
+
+    # print(f"num frames {len(frames)}")
+    # run_global_crop("data/gaza1.mp4")
+    run_global_crop("data/gaza2.mp4")
+    # run_global_crop("data/20231007_072204_hamza20300_159828.mp4")
