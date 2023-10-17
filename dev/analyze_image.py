@@ -12,6 +12,7 @@ class Frame:
     """
     def __init__(self, image: Image, text_prompt: str):
         self.image = image
+        self.resize_image = None
         self.text_prompt = text_prompt
         self.no_bb = True
         self.boxes = None
@@ -39,8 +40,7 @@ class Frame:
                 self.image = Image.new('RGB', (im_shape[1], im_shape[1]), (0, 0, 0))
                 self.image.paste(self.image, (pad, 0))
             # resize the pil image to be 512x512
-            self.image = self.image.resize((512, 512))
-            return self.image
+            return self.image.resize((512, 512))
         im_shape = self.image.size
         # calculate the crop size based on the bounding box
         x_min, y_min, x_max, y_max = self.cal_max_bb(self.boxes)
