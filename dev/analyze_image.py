@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 from lang_sam import LangSAM
 import time
-from dev.postprocessing import crop_image
+from typing import List
 
 class Frame:
     """
@@ -26,14 +26,11 @@ class Frame:
         x_max, y_max = boxes.numpy()[:, 2:4].max(axis=0)
         return x_min, y_min, x_max, y_max
 
-    @staticmethod
-    def crop_image(image, boxes):
+    def crop_image(self, image: Image, boxes: List) -> Image:
         # calculate the crop size based on the bounding box
         x_min, y_min, x_max, y_max = self.cal_max_bb(boxes)
-        image = image.crop((x_min, y_min, x_max, y_max))
-        return image
-    def crop_image(self, boxes):
-        return crop_image(self.image, boxes)
+        return image.crop((x_min, y_min, x_max, y_max))
+
 
     def convert_fig_to_numpy(self, fig):
         fig.canvas.draw()
