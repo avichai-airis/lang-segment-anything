@@ -31,6 +31,7 @@ class Video:
                 break
             # convert to RGB
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
             self.frames.append(Image.fromarray(frame))
         self.video_capture.release()
 
@@ -72,27 +73,33 @@ class Video:
         # Release the video.
         video.release()
 
-    def analyze_video(self, box_threshold=0.3, text_threshold=0.25):
+    def analyze_video(self, box_threshold=0.3, text_threshold=0.25, output_path="results/", debug: bool = False):
         model = LangSAM()
         i = 0
         # create results dir
-        if not os.path.exists("results/" + self.video_path.split("/")[-1].split(".")[0]):
-            os.makedirs("results/" + self.video_path.split("/")[-1].split(".")[0])
+        if not os.path.exists(output_path + self.video_path.split("/")[-1].split(".")[0]):
+            os.makedirs(output_path + self.video_path.split("/")[-1].split(".")[0])
         else:
             # remove old results
-            shutil.rmtree("results/" + self.video_path.split("/")[-1].split(".")[0])
-            os.makedirs("results/" + self.video_path.split("/")[-1].split(".")[0])
-        for pil_frame in tqdm(self.frames[::self.fps]):
+            shutil.rmtree(output_path + self.video_path.split("/")[-1].split(".")[0])
+            os.makedirs(output_path + self.video_path.split("/")[-1].split(".")[0])
+        for pil_frame in tqdm(self.frames[::10]):
             frame = Frame(pil_frame,  self.text_prompt)
             frame.detect_bb(model, box_threshold=box_threshold, text_threshold=text_threshold)
+            if debug:
+                frame.set_boxes_on_image()
+                # save image with boxes
+                frame.image_with_boxes.save(output_path + self.video_path.split("/")[-1].split(".")[0] + f"/{i}_boxes.png")
+                i += 1
+                continue
             # get the cropped image
             crop_frame = frame.crop_image()
             self.crop_frames.append(crop_frame)
 
             # save cropped frame
-            # resize_frame = frame.image.resize((512, 512))
-            # Image.fromarray(np.concatenate((np.array(resize_frame), np.array(crop_frame)), axis=1)).save("results/"+ self.video_path.split("/")[-1].split(".")[0] + f"/{i}.png")
-            crop_frame.save("results/"+ self.video_path.split("/")[-1].split(".")[0] + f"/{i}.png")
+            resize_frame = frame.image.resize((512, 512))
+            Image.fromarray(np.concatenate((np.array(resize_frame), np.array(crop_frame)), axis=1)).save(output_path+ self.video_path.split("/")[-1].split(".")[0] + f"/{i}.png")
+            #crop_frame.save(output_path+ self.video_path.split("/")[-1].split(".")[0] + f"/{i}.png")
             i += 1
             print(f"Frame {i} done")
         print("Done")
@@ -134,22 +141,7 @@ class Video:
 #                                 fps=1)
 #
 #
-#     def read_video_cv2(video_path):
-#         # read video
-#         cap = cv2.VideoCapture(video_path)
-#         # calculate the fps
-#         fps = cap.get(cv2.CAP_PROP_FPS)
-#         frames = []
-#         while(cap.isOpened()):
-#             ret, frame = cap.read()
-#             if ret == False:
-#                 break
-#             # convert to RGB
-#             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-#             frames.append(frame)
-#         cap.release()
-#         return frames, fps
-#
+
 # def run_global_crop(video_path):
 #     g_bb_min_x = 100000
 #     g_bb_min_y = 100000
@@ -232,24 +224,17 @@ class Video:
 # img_c = crop_image(image, boxes)
 # plt.imshow(img_c)
 # plt.show()
-
+def run_dir():
+    # go over all videos in dir
+    for video in os.listdir("data/real_data"):
+        if video.endswith(".mp4"):
+            print(f"Analyzing {video}")
+            video = Video("data/real_data/" + video)
+            video.analyze_video()
+    print("********************** finished analyzing all videos **********************")
 if __name__ == '__main__':
+    video = Video("data/gaza1.mp4")
+    video.analyze_video(output_path="debug/", debug=False)
 
-    # import imageio as iio
-    # import numpy as np
-    # # for idx, frame in enumerate(iio.imiter("data/gaza1.mp4")):
-    # #     print(f"Frame {idx}: avg. color {np.sum(frame, axis=-1)}")
-    # # read video
-    # frames = iio.mimread("data/gaza2.mp4", memtest=False)
-    # # calculate the fps
-    # fps = iio.get_reader("data/gaza2.mp4").get_meta_data()['fps']
-    # print(f"fps {fps}")
-    # frames = iio.imread("data/gaza1.mp4", plugin="pyav")
 
-    video = Video("data/20231007_072204_hamza20300_159828.mp4")
-    video.analyze_video()
-    # video.convert_frames_to_video('results/' + video.video_path.split("/")[-1].split(".")[0] + '.mp4', fps=1)
-    # print(f"num frames {len(frames)}")
-    # run_global_crop("data/gaza1.mp4")
-    # run_global_crop("data/gaza2.mp4")
-    # run_global_crop("data/20231007_072204_hamza20300_159828.mp4")
+

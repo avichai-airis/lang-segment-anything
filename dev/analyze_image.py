@@ -62,6 +62,9 @@ class Frame:
         return data
 
     def set_boxes_on_image(self,):
+        if self.no_bb:
+            self.image_with_boxes = self.image
+            return
         fig, ax = plt.subplots()
         ax.imshow(self.image)
         ax.set_title("Image with Bounding Boxes")
@@ -80,7 +83,7 @@ class Frame:
             # Add confidence score as text
             ax.text(x_min, y_min, f"Confidence: {confidence_score}", fontsize=8, color='red', verticalalignment='top')
 
-        self.image_with_boxes = self.convert_fig_to_numpy(fig)
+        self.image_with_boxes = Image.fromarray(self.convert_fig_to_numpy(fig))
         plt.close(fig)
 
     def detect_bb(self, model: LangSAM, box_threshold=0.3, text_threshold=0.25):
