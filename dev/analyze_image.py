@@ -26,10 +26,33 @@ class Frame:
         x_max, y_max = boxes.numpy()[:, 2:4].max(axis=0)
         return x_min, y_min, x_max, y_max
 
-    def crop_image(self, image: Image, boxes: List) -> Image:
+    def crop_image(self,) -> Image:
+        if self.no_bb:
+            # pad image to make it square
+            im_shape = self.image.size
+            if im_shape[0] > im_shape[1]:
+                pad = (im_shape[0] - im_shape[1]) // 2
+                self.image = Image.new('RGB', (im_shape[0], im_shape[0]), (0, 0, 0))
+                self.image.paste(self.image, (0, pad))
+            else:
+                pad = (im_shape[1] - im_shape[0]) // 2
+                self.image = Image.new('RGB', (im_shape[1], im_shape[1]), (0, 0, 0))
+                self.image.paste(self.image, (pad, 0))
+            # resize the pil image to be 512x512
+            self.image = self.image.resize((512, 512))
+            return self.image
+        im_shape = self.image.size
         # calculate the crop size based on the bounding box
-        x_min, y_min, x_max, y_max = self.cal_max_bb(boxes)
-        return image.crop((x_min, y_min, x_max, y_max))
+        x_min, y_min, x_max, y_max = self.cal_max_bb(self.boxes)
+        # crop the image such that it will be square and contain the bounding box
+        if x_max - x_min > y_max - y_min:
+            y_min = max(0, y_min - (x_max - x_min - (y_max - y_min)) // 2)
+            y_max = min(im_shape[1], y_max + (x_max - x_min - (y_max - y_min)) // 2)
+        else:
+            x_min = max(0, x_min - (y_max - y_min - (x_max - x_min)) // 2)
+            x_max = min(im_shape[0], x_max + (y_max - y_min - (x_max - x_min)) // 2)
+        crop_img = self.image.crop((x_min, y_min, x_max, y_max))
+        return crop_img.resize((512, 512))
 
 
     def convert_fig_to_numpy(self, fig):
@@ -74,6 +97,8 @@ class Frame:
     def show_image_with_boxes(self):
         plt.imshow(self.image_with_boxes)
         plt.show()
+
+
 
 
 def run_inference( image: Image,text_prompt: str,model: LangSAM,  box_threshold=0.25, text_threshold=0.25):
