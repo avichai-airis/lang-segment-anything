@@ -73,7 +73,7 @@ class Video:
         # Release the video.
         video.release()
 
-    def analyze_video(self, box_threshold=0.3, text_threshold=0.25, output_path="results/", debug: bool = False):
+    def analyze_video(self, box_threshold=0.3, text_threshold=0.25, output_path="results/",save_original_vs_cropped:bool = False, debug: bool = False):
         model = LangSAM()
         i = 0
         # create results dir
@@ -97,133 +97,17 @@ class Video:
             self.crop_frames.append(crop_frame)
 
             # save cropped frame
-            resize_frame = frame.image.resize((512, 512))
-            Image.fromarray(np.concatenate((np.array(resize_frame), np.array(crop_frame)), axis=1)).save(output_path+ self.video_path.split("/")[-1].split(".")[0] + f"/{i}.png")
-            #crop_frame.save(output_path+ self.video_path.split("/")[-1].split(".")[0] + f"/{i}.png")
+            if save_original_vs_cropped:
+                resize_frame = frame.image.resize((512, 512))
+                Image.fromarray(np.concatenate((np.array(resize_frame), np.array(crop_frame)), axis=1)).save('debug/'+ self.video_path.split("/")[-1].split(".")[0] + f"/{i}.png")
+            else:
+                crop_frame.save(output_path+ self.video_path.split("/")[-1].split(".")[0] + f"/{i}.png")
             i += 1
             print(f"Frame {i} done")
         print("Done")
 
 
-#     def read_video_imageio(video_path):
-#         # read video
-#         frames = iio.mimread(video_path, memtest=False)
-#         # calculate the fps
-#         fps = iio.get_reader(video_path).get_meta_data()['fps']
-#         return frames, fps
-#         model = LangSAM()
-#         cropped_frames = []
-#         original_frames = []
-#         frames, fps = read_video_cv2(video_path)
-#
-#         for frame in tqdm(frames[::int(fps)]):
-#             # convert numpy to PIL image
-#             frame = Image.fromarray(frame)
-#             boxes, logits, phrases = run_inference(frame, "buildings", model)
-#             if len(boxes) == 0:
-#                 curr_crop_frame = frame
-#             else:
-#                 curr_crop_frame = crop_image(frame, boxes)
-#             curr_crop_frame = np.array(curr_crop_frame)
-#             cropped_frames.append(curr_crop_frame)
-#
-#             # if max_x < curr_crop_frame.shape[0]:
-#             #     max_x = curr_crop_frame.shape[0]
-#             # if max_y < curr_crop_frame.shape[1]:
-#             #     max_y = curr_crop_frame.shape[1]
-#             original_frames.append(np.array(frame))
-#             # save cropped frame
-#             # curr_crop_frame.save("results/"+ video_path.split("/")[-1].split(".")[0] + f"/cropped_{i}.png")
-#             i += 1
-#         max_x = original_frames[0].shape[0]
-#         max_y = original_frames[0].shape[1]
-#         convert_frames_to_video(cropped_frames, original_frames, "results/" + video_path.split("/")[-1], max_x, max_y,
-#                                 fps=1)
-#
-#
 
-# def run_global_crop(video_path):
-#     g_bb_min_x = 100000
-#     g_bb_min_y = 100000
-#     g_bb_max_x = 0
-#     g_bb_max_y = 0
-#
-#     model = LangSAM()
-#     cropped_frames = []
-#     original_frames = []
-#     frames, fps = read_video_cv2(video_path)
-#
-#     for frame in tqdm(frames[::int(fps)]):
-#         # convert numpy to PIL image
-#         frame = Image.fromarray(frame)
-#         boxes, logits, phrases = run_inference(frame, "buildings", model)
-#         original_frames.append(np.array(frame))
-#         if len(boxes) != 0:
-#             bb_min_x, bb_min_y, bb_max_x, bb_max_y = cal_max_bb(boxes)
-#             if bb_min_x < g_bb_min_x:
-#                 g_bb_min_x = bb_min_x
-#             if bb_min_y < g_bb_min_y:
-#                 g_bb_min_y = bb_min_y
-#             if bb_max_x > g_bb_max_x:
-#                 g_bb_max_x = bb_max_x
-#             if bb_max_y > g_bb_max_y:
-#                 g_bb_max_y = bb_max_y
-#
-#     for frame in tqdm(original_frames):
-#         cropped_frames.append(frame[int(g_bb_min_x):int(g_bb_max_x), int(g_bb_min_y):int(g_bb_max_y), :])
-#     max_x = original_frames[0].shape[0]
-#     max_y = original_frames[0].shape[1]
-#     convert_frames_to_video(cropped_frames, original_frames, "results/global_crop/" + video_path.split("/")[-1], max_x, max_y,
-#                             fps=1)
-#
-#
-#     pass
-#
-#
-# def run(video_path):
-#     model = LangSAM()
-#     cropped_frames = []
-#     original_frames = []
-#     frames, fps = read_video_cv2(video_path)
-#     # make results dir
-#
-#     # if not os.path.exists("results/"+ video_path.split("/")[-1].split(".")[0]):
-#     #     os.makedirs("results/"+ video_path.split("/")[-1].split(".")[0])
-#     # else:
-#     #     # remove old results
-#     #
-#     #     shutil.rmtree("results/"+ video_path.split("/")[-1].split(".")[0])
-#     i = 0
-#     for frame in tqdm(frames[::int(fps)]):
-#         # convert numpy to PIL image
-#         frame = Image.fromarray(frame)
-#         boxes, logits, phrases = run_inference(frame,"buildings", model)
-#         if len(boxes) == 0:
-#             curr_crop_frame = frame
-#         else:
-#             curr_crop_frame = crop_image(frame, boxes)
-#         curr_crop_frame = np.array(curr_crop_frame)
-#         cropped_frames.append(curr_crop_frame)
-#
-#
-#
-#         # if max_x < curr_crop_frame.shape[0]:
-#         #     max_x = curr_crop_frame.shape[0]
-#         # if max_y < curr_crop_frame.shape[1]:
-#         #     max_y = curr_crop_frame.shape[1]
-#         original_frames.append(np.array(frame))
-#         # save cropped frame
-#         # curr_crop_frame.save("results/"+ video_path.split("/")[-1].split(".")[0] + f"/cropped_{i}.png")
-#         i += 1
-#     max_x = original_frames[0].shape[0]
-#     max_y = original_frames[0].shape[1]
-#     convert_frames_to_video(cropped_frames,original_frames, "results/"+ video_path.split("/")[-1],max_x, max_y, fps=1)
-
-
-
-# img_c = crop_image(image, boxes)
-# plt.imshow(img_c)
-# plt.show()
 def run_dir():
     # go over all videos in dir
     for video in os.listdir("data/real_data"):
@@ -233,7 +117,8 @@ def run_dir():
             video.analyze_video()
     print("********************** finished analyzing all videos **********************")
 if __name__ == '__main__':
-    video = Video("data/gaza1.mp4")
+
+    video = Video("data/real_data/W7_EDlXWTBiXAEEniNoMPwAAYamdpeGl2cXZqAYsGfNuqAYsGfNtTAAAAAQ.mp4")
     video.analyze_video(output_path="debug/", debug=False)
 
 
