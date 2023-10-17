@@ -11,77 +11,103 @@ from dev.utils import cal_max_bb
 import shutil
 import os
 import matplotlib.pyplot as plt
-def read_video_imageio(video_path):
-    # read video
-    frames = iio.mimread(video_path, memtest=False)
-    # calculate the fps
-    fps = iio.get_reader(video_path).get_meta_data()['fps']
-    return frames, fps
-    model = LangSAM()
-    cropped_frames = []
-    original_frames = []
-    frames, fps = read_video_cv2(video_path)
 
-    for frame in tqdm(frames[::int(fps)]):
-        # convert numpy to PIL image
-        frame = Image.fromarray(frame)
-        boxes, logits, phrases = run_inference(frame, "buildings", model)
-        if len(boxes) == 0:
-            curr_crop_frame = frame
+class Video:
+    def __init__(self, video_path):
+        self.video_path = video_path
+        self.video_capture = cv2.VideoCapture(self.video_path)
+        self.fps = iio.get_reader(self.video_path).get_meta_data()['fps']
+        self.frames = []
+
+        
+    def get_next_frame(self):
+        ret, frame = self.video_capture.read()
+        if ret:
+            frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+            self.frames.append(frame)
+            return frame
         else:
-            curr_crop_frame = crop_image(frame, boxes)
-        curr_crop_frame = np.array(curr_crop_frame)
-        cropped_frames.append(curr_crop_frame)
+            self.release()
+            return None
 
-        # if max_x < curr_crop_frame.shape[0]:
-        #     max_x = curr_crop_frame.shape[0]
-        # if max_y < curr_crop_frame.shape[1]:
-        #     max_y = curr_crop_frame.shape[1]
-        original_frames.append(np.array(frame))
-        # save cropped frame
-        # curr_crop_frame.save("results/"+ video_path.split("/")[-1].split(".")[0] + f"/cropped_{i}.png")
-        i += 1
-    max_x = original_frames[0].shape[0]
-    max_y = original_frames[0].shape[1]
-    convert_frames_to_video(cropped_frames, original_frames, "results/" + video_path.split("/")[-1], max_x, max_y,
-                            fps=1)
+    def release(self):
+        self.video_capture.release()
+
+    @staticmethod
+    def pad_frame(frame, max_x, max_y):
+        return np.pad(frame, ((0, max_x - frame.shape[0]), (0, max_y - frame.shape[1]), (0, 0)),
+                      'constant', constant_values=min(frame.flatten()))
+
+    def convert_frames_to_video(self, crop_frames, output_path, max_x, max_y, fps=30):
+        # Write the frames to a video.
+        height, width, channels = self.frames[0].shape * 2
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        video = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+
+        # pad all images to the same size
+        for i in range(len(crop_frames)):
+            crop_frames[i] = self.pad_frame(crop_frames[i], max_x, max_y)
+            # concat original and cropped
+            crop_frames[i] = np.concatenate((self.frames[i], crop_frames[i]), axis=1)
+
+            # convert to RGB
+            frame = cv2.cvtColor(crop_frames[i], cv2.COLOR_BGR2RGB)
+            video.write(frame)
+        # Release the video.
+        video.release()
+
+    def read_video_imageio(video_path):
+        # read video
+        frames = iio.mimread(video_path, memtest=False)
+        # calculate the fps
+        fps = iio.get_reader(video_path).get_meta_data()['fps']
+        return frames, fps
+        model = LangSAM()
+        cropped_frames = []
+        original_frames = []
+        frames, fps = read_video_cv2(video_path)
+
+        for frame in tqdm(frames[::int(fps)]):
+            # convert numpy to PIL image
+            frame = Image.fromarray(frame)
+            boxes, logits, phrases = run_inference(frame, "buildings", model)
+            if len(boxes) == 0:
+                curr_crop_frame = frame
+            else:
+                curr_crop_frame = crop_image(frame, boxes)
+            curr_crop_frame = np.array(curr_crop_frame)
+            cropped_frames.append(curr_crop_frame)
+
+            # if max_x < curr_crop_frame.shape[0]:
+            #     max_x = curr_crop_frame.shape[0]
+            # if max_y < curr_crop_frame.shape[1]:
+            #     max_y = curr_crop_frame.shape[1]
+            original_frames.append(np.array(frame))
+            # save cropped frame
+            # curr_crop_frame.save("results/"+ video_path.split("/")[-1].split(".")[0] + f"/cropped_{i}.png")
+            i += 1
+        max_x = original_frames[0].shape[0]
+        max_y = original_frames[0].shape[1]
+        convert_frames_to_video(cropped_frames, original_frames, "results/" + video_path.split("/")[-1], max_x, max_y,
+                                fps=1)
 
 
-def read_video_cv2(video_path):
-    # read video
-    cap = cv2.VideoCapture(video_path)
-    # calculate the fps
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    frames = []
-    while(cap.isOpened()):
-        ret, frame = cap.read()
-        if ret == False:
-            break
-        # convert to RGB
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frames.append(frame)
-    cap.release()
-    return frames, fps
-def convert_frames_to_video(crop_frames,orig_frames, output_path, max_x, max_y, fps=30):
-    # pad all images to the same size
-    for i in range(len(crop_frames)):
-        crop_frames[i] = np.pad(crop_frames[i], ((0, max_x - crop_frames[i].shape[0]), (0, max_y - crop_frames[i].shape[1]), (0, 0)),
-                           'constant', constant_values=min(crop_frames[i].flatten()))
-        # concat original and cropped
-        crop_frames[i] = np.concatenate((orig_frames[i], crop_frames[i]), axis=1)
+    def read_video_cv2(video_path):
+        # read video
+        cap = cv2.VideoCapture(video_path)
+        # calculate the fps
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        frames = []
+        while(cap.isOpened()):
+            ret, frame = cap.read()
+            if ret == False:
+                break
+            # convert to RGB
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frames.append(frame)
+        cap.release()
+        return frames, fps
 
-    # Write the frames to a video.
-    height, width, channels = crop_frames[0].shape
-    fourcc  = cv2.VideoWriter_fourcc(*'mp4v')
-    video = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
-
-    for frame in crop_frames:
-        # convert to RGB
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        video.write(frame)
-
-    # Release the video.
-    video.release()
 def run_global_crop(video_path):
     g_bb_min_x = 100000
     g_bb_min_y = 100000
@@ -118,9 +144,9 @@ def run_global_crop(video_path):
 
 
     pass
+
+
 def run(video_path):
-    max_x = 0
-    max_y = 0
     model = LangSAM()
     cropped_frames = []
     original_frames = []

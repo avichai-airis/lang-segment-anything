@@ -76,7 +76,7 @@ class Frame:
         plt.show()
 
 
-def run_inference( image: Image,text_prompt: str,model: LangSAM,  box_threshold=0.25, text_threshold=0.25, show_run_time=False):
+def run_inference( image: Image,text_prompt: str,model: LangSAM,  box_threshold=0.25, text_threshold=0.25):
     frame = Frame(image, text_prompt)
     frame.detect_bb(model, box_threshold=box_threshold, text_threshold=text_threshold)
     return frame
