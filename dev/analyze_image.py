@@ -1,24 +1,37 @@
 import warnings
 import numpy as np
 import matplotlib.pyplot as plt
-import requests
 from PIL import Image
-from io import BytesIO
 from lang_sam import LangSAM
 import time
-from dev.drawing import display_image_with_boxes
 from dev.postprocessing import crop_image
 
 class Frame:
+    """
+    Frame class to hold image and text prompt
+    """
     def __init__(self, image: Image, text_prompt: str):
         self.image = image
         self.text_prompt = text_prompt
-        self.no_bb = False
+        self.no_bb = True
         self.boxes = None
         self.logits = None
         self.phrases = None
         self.image_with_boxes = None
 
+    @staticmethod
+    def cal_max_bb(boxes):
+        # calculate the crop size based on the bounding box
+        x_min, y_min = boxes.numpy()[:, 0:2].min(axis=0)
+        x_max, y_max = boxes.numpy()[:, 2:4].max(axis=0)
+        return x_min, y_min, x_max, y_max
+
+    @staticmethod
+    def crop_image(image, boxes):
+        # calculate the crop size based on the bounding box
+        x_min, y_min, x_max, y_max = self.cal_max_bb(boxes)
+        image = image.crop((x_min, y_min, x_max, y_max))
+        return image
     def crop_image(self, boxes):
         return crop_image(self.image, boxes)
 
@@ -58,13 +71,12 @@ class Frame:
         print(f"Time: {(end - start):.2f}s")
         if len(self.boxes) == 0:
             warnings.warn("No bounding boxes found")
-            self.no_bb = True
+        else:
+            self.no_bb = False
+
     def show_image_with_boxes(self):
         plt.imshow(self.image_with_boxes)
         plt.show()
-
-
-
 
 
 def run_inference( image: Image,text_prompt: str,model: LangSAM,  box_threshold=0.25, text_threshold=0.25, show_run_time=False):
@@ -72,8 +84,9 @@ def run_inference( image: Image,text_prompt: str,model: LangSAM,  box_threshold=
     frame.detect_bb(model, box_threshold=box_threshold, text_threshold=text_threshold)
     return frame
 
+
 if __name__ == '__main__':
-    image_path =  "data/crop_building3.png"
+    image_path = "data/crop_building3.png"
     model = LangSAM()
     text_prompt = "buildings"
     image = Image.open(image_path).convert("RGB")
